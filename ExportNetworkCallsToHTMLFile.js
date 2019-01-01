@@ -43,6 +43,7 @@ var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' +
 var networkData = HTML_HEADER_AND_IMPORTS;
 var tabURL = "";
 var id_iterator = 1;
+var downloadButtonDragged = false;
 
 var input = document.createElement("input");
 input.id = DOWNLOAD_BUTTON_ID;
@@ -69,6 +70,7 @@ function dragElement(element) {
     }
 
     function elementDrag(event) {
+        downloadButtonDragged = true;
         event = event || window.event;
         event.preventDefault();
         pos1 = pos3 - event.clientX;
@@ -80,21 +82,26 @@ function dragElement(element) {
     }
 
     function closeDragElement() {
+        downloadButtonDragged = downloadButtonDragged === true ? true : false
         document.onmouseup = null;
         document.onmousemove = null;
     }
 }
 
 function downloadNetworkData() {
-    networkData = networkData + CLOSING_DIV + BODY_CLOSING_TAG + HTML_CLOSING_TAG;
+    if (!downloadButtonDragged) {
+        networkData = networkData + CLOSING_DIV + BODY_CLOSING_TAG + HTML_CLOSING_TAG;
 
-    var a = document.createElement("a");
-    a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
-    a.download = FILENAME;
-    document.getElementsByTagName("body")[0].appendChild(a);
-    a.click();
-    networkData = HTML_HEADER_AND_IMPORTS;
-    tabURL = "";
+        var a = document.createElement("a");
+        a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
+        a.download = FILENAME;
+        document.getElementsByTagName("body")[0].appendChild(a);
+        a.click();
+        networkData = HTML_HEADER_AND_IMPORTS;
+        tabURL = "";
+    } else {
+        downloadButtonDragged = false;
+    }
 }
 
 (function() {
