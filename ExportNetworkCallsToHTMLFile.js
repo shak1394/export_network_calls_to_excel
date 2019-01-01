@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  Collect network data.
 // @author       Shaket Kumar
-// @match        https://submitter-atp-gamma-iad.iad.proxy.amazon.com/***
+// @match        https://*/***
 // @require      https://unpkg.com/xhook@latest/dist/xhook.min.js
 // @run-at       document-start
 // @grant        none
