@@ -45,6 +45,8 @@ var networkData = HTML_HEADER_AND_IMPORTS;
 var tabURL = "";
 var id_iterator = 1;
 var downloadButtonDragged = false;
+var beforeCallScreenshotMap = new Object();
+var screenshotDocument;
 
 var input = document.createElement("input");
 input.id = DOWNLOAD_BUTTON_ID;
@@ -108,26 +110,33 @@ function downloadNetworkData() {
 (function() {
     xhook.before(function(request) {
         appendWindowLocationToNetworkData();
-        captureScreenshot();
+        captureScreenshot(request, false);
     });
 })();
 
 (function() {
     xhook.after(function(request, response) {
         var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
-        networkData = networkData + eachNetworkData;
+        networkData = networkData + eachNetworkData + "<p>Before:</p><br>" + beforeCallScreenshotMap[request.url.toString()];
 
-        setTimeout(captureScreenshot(), 2000);
+        captureScreenshot(request, true);
     });
 })();
 
-function captureScreenshot() {
+function captureScreenshot(request, captureScreenshotAfterCall) {
     html2canvas(document.getElementById("root"), {
         onrendered: function (canvas) {
-            networkData = networkData + '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
+            screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
         },
         letterRendering:true
     });
+
+    if (captureScreenshotAfterCall) {
+        networkData = networkData + "<p>After:</p>" + screenshotDocument;
+        return;
+    }
+
+    beforeCallScreenshotMap[request.url.toString()] = screenshotDocument;
 }
 
 function appendWindowLocationToNetworkData() {
