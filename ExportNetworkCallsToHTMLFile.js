@@ -2,10 +2,11 @@
 // @name         URL interceptor
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  Collect network data.
+// @description  Collect network data and before/after screenshots.
 // @author       Shaket Kumar
-// @match        https://*/***
+// @match        https://submitter-atp-gamma-iad.iad.proxy.amazon.com/***
 // @require      https://unpkg.com/xhook@latest/dist/xhook.min.js
+// @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js
 // @run-at       document-start
 // @grant        none
 // ==/UserScript==
@@ -105,12 +106,29 @@ function downloadNetworkData() {
 }
 
 (function() {
-    xhook.after(function(request, response) {
+    xhook.before(function(request) {
         appendWindowLocationToNetworkData();
-        var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
-        networkData = networkData + eachNetworkData;
+        captureScreenshot();
     });
 })();
+
+(function() {
+    xhook.after(function(request, response) {
+        var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
+        networkData = networkData + eachNetworkData;
+
+        setTimeout(captureScreenshot(), 2000);
+    });
+})();
+
+function captureScreenshot() {
+    html2canvas(document.getElementById("root"), {
+        onrendered: function (canvas) {
+            networkData = networkData + '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
+        },
+        letterRendering:true
+    });
+}
 
 function appendWindowLocationToNetworkData() {
     var currentTabURL = window.location.href;
