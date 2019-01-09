@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  Collect network data and before/after screenshots.
 // @author       Shaket Kumar
-// @match        https://submitter-atp-gamma-iad.iad.proxy.amazon.com/***
+// @match        https://*/***
 // @require      https://unpkg.com/xhook@latest/dist/xhook.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js
 // @run-at       document-start
