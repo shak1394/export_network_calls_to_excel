@@ -46,9 +46,13 @@ var tabURL = "";
 var id_iterator = 1;
 var screenshot_iterator = 0;
 var downloadButtonDragged = false;
-var beforeCallScreenshotMap = new Object();
-var beforeCallScreenshotMapTracker = new Object();
-var screenshotDocument;
+var eachPageCallDiv = new Map();
+var eachNetworkCallDiv = new Map();
+var eachNetworkCallScreenshot = new Map();
+var eachPageNumberOfNetworkCalls = new Map();
+var eachPageCallIterator = 0;
+var eachNetworkCallIterator = 0;
+var eachNetworkCallScreenshotIterator = 0;
 
 var input = document.createElement("input");
 input.id = DOWNLOAD_BUTTON_ID;
@@ -95,21 +99,15 @@ function dragElement(element) {
 
 function downloadNetworkData() {
     if (!downloadButtonDragged) {
-        captureScreenshot();
+        buildNetworkData();
 
-        var tabUrlButtonText = "Screenshot after " + window.location.href;
-        networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE + createCollapsableImage(beforeCallScreenshotMap[window.location.href.toString()], tabUrlButtonText) +
-            BODY_CLOSING_TAG + HTML_CLOSING_TAG;
-
-        setTimeout(function() {
-            var a = document.createElement("a");
-            a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
-            a.download = FILENAME;
-            document.getElementsByTagName("body")[0].appendChild(a);
-            a.click();
-            networkData = HTML_HEADER_AND_IMPORTS;
-            tabURL = "";
-        }, 0);
+        var a = document.createElement("a");
+        a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
+        a.download = FILENAME;
+        document.getElementsByTagName("body")[0].appendChild(a);
+        a.click();
+        networkData = HTML_HEADER_AND_IMPORTS;
+        tabURL = "";
     } else {
         downloadButtonDragged = false;
     }
@@ -118,27 +116,41 @@ function downloadNetworkData() {
 (function() {
     xhook.before(function(request) {
         appendWindowLocationToNetworkData();
-        setTimeout(function() {captureBeforeScreenshot(window.location.href.toString())}, 1000);
     });
 })();
 
 (function() {
     xhook.after(function(request, response) {
         var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
-        networkData = networkData + eachNetworkData + NEW_LINE;
+
+        eachNetworkCallIterator++;
+        var eachNetworkCallDivMapKey = tabURL.toString() + request.url.toString() + eachNetworkCallIterator.toString();
+        eachNetworkCallDiv.set(eachNetworkCallDivMapKey, eachNetworkData);
+
+        var eachPageCallDivMapKey = tabURL.toString() + eachPageCallIterator.toString();
+        if (!eachPageNumberOfNetworkCalls.has(eachPageCallDivMapKey)) {
+            eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, 1);
+        } else {
+            eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, eachPageNumberOfNetworkCalls.get(eachPageCallDivMapKey) + 1);
+        }
+
+        setTimeout(function() {captureAfterScreenshot(request.url.toString())}, 1000);
     });
 })();
 
-function captureBeforeScreenshot(tabURL) {
-    captureScreenshot();
+function captureAfterScreenshot(ajaxCall) {
+    captureScreenshot(ajaxCall);
 }
 
-function captureScreenshot() {
+function captureScreenshot(ajaxCall) {
     html2canvas(document.getElementById("root"), {
         onrendered: function (canvas) {
-            screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>';
-            beforeCallScreenshotMap[tabURL.toString()] = screenshotDocument;
-            beforeCallScreenshotMapTracker[tabURL.toString()] = 1;
+            eachNetworkCallScreenshotIterator++;
+            var screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>';
+            var tabUrlButtonText = "Screenshot after " + ajaxCall;
+            var eachNetworkDataScreenshot = createCollapsableImage(screenshotDocument, tabUrlButtonText);
+            var eachNetworkCallScreenshotMapKey = tabURL.toString() + ajaxCall.toString() + eachNetworkCallScreenshotIterator.toString();
+            eachNetworkCallScreenshot.set(eachNetworkCallScreenshotMapKey, eachNetworkDataScreenshot);
         },
         letterRendering:true
     });
@@ -147,19 +159,11 @@ function captureScreenshot() {
 function appendWindowLocationToNetworkData() {
     var currentTabURL = window.location.href;
     if (currentTabURL !== tabURL) {
-        if (networkData !== HTML_HEADER_AND_IMPORTS) {
-            networkData = networkData + CLOSING_DIV + NEW_LINE;
-        }
-
-        if (beforeCallScreenshotMapTracker[tabURL.toString()] === 1) {
-            var tabUrlButtonText = "Screenshot between " + tabURL + " and " + currentTabURL;
-            networkData = networkData + NEW_LINE +
-                createCollapsableImage(beforeCallScreenshotMap[tabURL.toString()], tabUrlButtonText) + NEW_LINE + NEW_LINE;
-            beforeCallScreenshotMapTracker[tabURL.toString()] = 0;
-        }
-
-        networkData = networkData + createCollapsableTabUrlButtonWithText(currentTabURL) + NEW_LINE;
+        eachPageCallIterator++;
         tabURL = currentTabURL;
+        var eachPageCallData =  createCollapsableTabUrlButtonWithText(tabURL);
+        var eachPageCallDivMapKey = tabURL.toString() + eachPageCallIterator.toString();
+        eachPageCallDiv.set(eachPageCallDivMapKey, eachPageCallData);
     }
 }
 
@@ -208,4 +212,22 @@ function createCollapsableImage(imageDocument, tabUrlButtonText) {
     return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=#' + screenshot_iterator + '>' +
             tabUrlButtonText + '</button>' + '<div id=' + screenshot_iterator + ' class="collapse" style="background-color: antiquewhite;">' +
             imageDocument + '</div>';
+}
+
+function buildNetworkData() {
+    for (var [pageCallKey, pageCallValue] of eachPageCallDiv) {
+        networkData = networkData + pageCallValue;
+        var numberOfCalls = eachPageNumberOfNetworkCalls.get(pageCallKey);
+        for (var [networkCallKey, networkCallValue] of eachNetworkCallDiv) {
+            if (numberOfCalls > 0) {
+                networkData = networkData + NEW_LINE + networkCallValue + eachNetworkCallScreenshot.get(networkCallKey) + NEW_LINE + NEW_LINE;
+                eachNetworkCallDiv.delete(networkCallKey);
+                eachNetworkCallScreenshot.delete(networkCallKey);
+                numberOfCalls--;
+            } else {
+                break;
+            }
+        }
+        networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE;
+    }
 }
