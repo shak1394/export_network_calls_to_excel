@@ -2,7 +2,7 @@
 // @name         URL interceptor
 // @namespace    http://tampermonkey.net/
 // @version      0.1
-// @description  Collect network data and before/after screenshots.
+// @description  Collect network data and screenshots.
 // @author       Shaket Kumar
 // @match        https://submitter-atp-gamma-iad.iad.proxy.amazon.com/***
 // @require      https://unpkg.com/xhook@latest/dist/xhook.min.js
@@ -28,25 +28,26 @@ var DOWNLOAD_BUTTON_TEXT = "Download Network Data";
 var DOWNLOAD_BUTTON_ID = "input_id";
 var DOWNLOAD_BUTTON_STYLE = "position:absolute; top:0px; left:0px; z-index:10; border-radius:100%; height:70px; background-color:coral; color:mediumblue; font-weight:bold";
 var PIXEL = "px";
-var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' + 
-        '<html>' + 
-        '<head>' + 
-        '<meta name="viewport" content="width=device-width, initial-scale=1">' + 
-        '<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">' + 
-        '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>' + 
-        '<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js">' + 
-        '</script>' + 
-        '</head>' + 
-        '<body style="background-color: burlywood;">' + 
-        '<div class="container">' + 
+var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' +
+        '<html>' +
+        '<head>' +
+        '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+        '<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css">' +
+        '<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>' +
+        '<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js">' +
+        '</script>' +
+        '</head>' +
+        '<body style="background-color: burlywood;">' +
+        '<div class="container">' +
         '<h2>Network Data</h2>';
 
 var networkData = HTML_HEADER_AND_IMPORTS;
 var tabURL = "";
 var id_iterator = 1;
+var screenshot_iterator = 0;
 var downloadButtonDragged = false;
 var beforeCallScreenshotMap = new Object();
-var afterScreenshotCalledOnTabURL = new Object();
+var beforeCallScreenshotMapTracker = new Object();
 var screenshotDocument;
 
 var input = document.createElement("input");
@@ -94,15 +95,21 @@ function dragElement(element) {
 
 function downloadNetworkData() {
     if (!downloadButtonDragged) {
-        networkData = networkData + CLOSING_DIV + BODY_CLOSING_TAG + HTML_CLOSING_TAG;
+        captureScreenshot();
 
-        var a = document.createElement("a");
-        a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
-        a.download = FILENAME;
-        document.getElementsByTagName("body")[0].appendChild(a);
-        a.click();
-        networkData = HTML_HEADER_AND_IMPORTS;
-        tabURL = "";
+        var tabUrlButtonText = "Screenshot after " + window.location.href;
+        networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE + createCollapsableImage(beforeCallScreenshotMap[window.location.href.toString()], tabUrlButtonText) +
+            BODY_CLOSING_TAG + HTML_CLOSING_TAG;
+
+        setTimeout(function() {
+            var a = document.createElement("a");
+            a.href = "data:application/html;charset=utf-8," + encodeURIComponent(networkData);
+            a.download = FILENAME;
+            document.getElementsByTagName("body")[0].appendChild(a);
+            a.click();
+            networkData = HTML_HEADER_AND_IMPORTS;
+            tabURL = "";
+        }, 0);
     } else {
         downloadButtonDragged = false;
     }
@@ -111,8 +118,7 @@ function downloadNetworkData() {
 (function() {
     xhook.before(function(request) {
         appendWindowLocationToNetworkData();
-        captureBeforeScreenshot(window.location.href);
-        afterScreenshotCalledOnTabURL[window.location.href.toString()] = 0;
+        setTimeout(function() {captureBeforeScreenshot(window.location.href.toString())}, 1000);
     });
 })();
 
@@ -120,43 +126,38 @@ function downloadNetworkData() {
     xhook.after(function(request, response) {
         var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
         networkData = networkData + eachNetworkData + NEW_LINE;
-
-        setTimeout(captureAfterScreenshot(window.location.href), 5000);
     });
 })();
 
 function captureBeforeScreenshot(tabURL) {
+    captureScreenshot();
+}
+
+function captureScreenshot() {
     html2canvas(document.getElementById("root"), {
         onrendered: function (canvas) {
-            screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
+            screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>';
+            beforeCallScreenshotMap[tabURL.toString()] = screenshotDocument;
+            beforeCallScreenshotMapTracker[tabURL.toString()] = 1;
         },
         letterRendering:true
     });
-
-    beforeCallScreenshotMap[tabURL.toString()] = screenshotDocument;
-}
-
-function captureAfterScreenshot(tabURL) {
-    if (afterScreenshotCalledOnTabURL[tabURL.toString()] === 0) {
-        html2canvas(document.getElementById("root"), {
-            onrendered: function (canvas) {
-                screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
-            },
-            letterRendering:true
-        });
-
-        networkData = networkData + "<p>Before:</p><br>" + beforeCallScreenshotMap[tabURL.toString()] + NEW_LINE + "<p>After:</p>" + screenshotDocument;
-        afterScreenshotCalledOnTabURL[tabURL.toString()] = 1;
-    }
 }
 
 function appendWindowLocationToNetworkData() {
     var currentTabURL = window.location.href;
     if (currentTabURL !== tabURL) {
-        afterScreenshotCalledOnTabURL[tabURL.toString()] = 0;
         if (networkData !== HTML_HEADER_AND_IMPORTS) {
-            networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE;
+            networkData = networkData + CLOSING_DIV + NEW_LINE;
         }
+
+        if (beforeCallScreenshotMapTracker[tabURL.toString()] === 1) {
+            var tabUrlButtonText = "Screenshot between " + tabURL + " and " + currentTabURL;
+            networkData = networkData + NEW_LINE +
+                createCollapsableImage(beforeCallScreenshotMap[tabURL.toString()], tabUrlButtonText) + NEW_LINE + NEW_LINE;
+            beforeCallScreenshotMapTracker[tabURL.toString()] = 0;
+        }
+
         networkData = networkData + createCollapsableTabUrlButtonWithText(currentTabURL) + NEW_LINE;
         tabURL = currentTabURL;
     }
@@ -164,8 +165,8 @@ function appendWindowLocationToNetworkData() {
 
 function getEachNetworkData(request, response) {
     return colorText(request.method, REQUEST_METHOD) + NEW_LINE +
-            colorText(request.body, REQUEST_BODY) + NEW_LINE + 
-            colorText(response.status, RESPONSE_STATUS) + NEW_LINE + 
+            colorText(request.body, REQUEST_BODY) + NEW_LINE +
+            colorText(response.status, RESPONSE_STATUS) + NEW_LINE +
             colorText(JSON.stringify(JSON.parse(response.data), null, 2), RESPONSE_DATA);
 }
 
@@ -190,7 +191,7 @@ function createCollapsableTabUrlButtonWithText(tabUrlButtonText) {
     var data_target = "#demo" + id_iterator;
     var div_id = data_target.substr(1);
     id_iterator++;
-    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' + 
+    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' +
             tabUrlButtonText + '</button>' + '<div id=' + div_id + ' class="collapse" style="background-color: antiquewhite;">';
 }
 
@@ -198,6 +199,13 @@ function createCollapsableButtonWithText(buttonText, internalText) {
     var data_target = "#demo" + id_iterator;
     var div_id = data_target.substr(1);
     id_iterator++;
-    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' + buttonText + '</button>' + 
+    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' + buttonText + '</button>' +
             '<div id=' + div_id + ' class="collapse" style="background-color: lightgoldenrodyellow;" >' + internalText + '</div><br><br>';
+}
+
+function createCollapsableImage(imageDocument, tabUrlButtonText) {
+    screenshot_iterator++;
+    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=#' + screenshot_iterator + '>' +
+            tabUrlButtonText + '</button>' + '<div id=' + screenshot_iterator + ' class="collapse" style="background-color: antiquewhite;">' +
+            imageDocument + '</div>';
 }
