@@ -46,6 +46,7 @@ var tabURL = "";
 var id_iterator = 1;
 var downloadButtonDragged = false;
 var beforeCallScreenshotMap = new Object();
+var afterScreenshotCalledOnTabURL = new Object();
 var screenshotDocument;
 
 var input = document.createElement("input");
@@ -110,20 +111,21 @@ function downloadNetworkData() {
 (function() {
     xhook.before(function(request) {
         appendWindowLocationToNetworkData();
-        captureScreenshot(request, false);
+        captureBeforeScreenshot(window.location.href);
+        afterScreenshotCalledOnTabURL[window.location.href.toString()] = 0;
     });
 })();
 
 (function() {
     xhook.after(function(request, response) {
         var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
-        networkData = networkData + eachNetworkData + "<p>Before:</p><br>" + beforeCallScreenshotMap[request.url.toString()];
+        networkData = networkData + eachNetworkData + NEW_LINE;
 
-        captureScreenshot(request, true);
+        setTimeout(captureAfterScreenshot(window.location.href), 5000);
     });
 })();
 
-function captureScreenshot(request, captureScreenshotAfterCall) {
+function captureBeforeScreenshot(tabURL) {
     html2canvas(document.getElementById("root"), {
         onrendered: function (canvas) {
             screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
@@ -131,17 +133,27 @@ function captureScreenshot(request, captureScreenshotAfterCall) {
         letterRendering:true
     });
 
-    if (captureScreenshotAfterCall) {
-        networkData = networkData + "<p>After:</p>" + screenshotDocument;
-        return;
-    }
+    beforeCallScreenshotMap[tabURL.toString()] = screenshotDocument;
+}
 
-    beforeCallScreenshotMap[request.url.toString()] = screenshotDocument;
+function captureAfterScreenshot(tabURL) {
+    if (afterScreenshotCalledOnTabURL[tabURL.toString()] === 0) {
+        html2canvas(document.getElementById("root"), {
+            onrendered: function (canvas) {
+                screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>' + NEW_LINE;
+            },
+            letterRendering:true
+        });
+
+        networkData = networkData + "<p>Before:</p><br>" + beforeCallScreenshotMap[tabURL.toString()] + NEW_LINE + "<p>After:</p>" + screenshotDocument;
+        afterScreenshotCalledOnTabURL[tabURL.toString()] = 1;
+    }
 }
 
 function appendWindowLocationToNetworkData() {
     var currentTabURL = window.location.href;
     if (currentTabURL !== tabURL) {
+        afterScreenshotCalledOnTabURL[tabURL.toString()] = 0;
         if (networkData !== HTML_HEADER_AND_IMPORTS) {
             networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE;
         }
