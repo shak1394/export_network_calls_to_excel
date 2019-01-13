@@ -4,8 +4,7 @@
 // @version      0.1
 // @description  Collect network data and screenshots.
 // @author       Shaket Kumar
-// @match        https://submitter-atp-gamma-iad.iad.proxy.amazon.com/***
-// @require      https://unpkg.com/xhook@latest/dist/xhook.min.js
+// @match        https://*/***
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js
 // @run-at       document-start
 // @grant        none
@@ -28,6 +27,7 @@ var DOWNLOAD_BUTTON_TEXT = "Download Network Data";
 var DOWNLOAD_BUTTON_ID = "input_id";
 var DOWNLOAD_BUTTON_STYLE = "position:absolute; top:0px; left:0px; z-index:10; border-radius:100%; height:70px; background-color:coral; color:mediumblue; font-weight:bold";
 var PIXEL = "px";
+var SCREENSHOT_BUTTON_TEXT = "Screenshot";
 var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' +
         '<html>' +
         '<head>' +
@@ -37,9 +37,9 @@ var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' +
         '<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js">' +
         '</script>' +
         '</head>' +
-        '<body style="background-color: burlywood;">' +
+        '<body style="background-color:#001f3f;">' +
         '<div class="container">' +
-        '<h2>Network Data</h2>';
+        '<h2 style="color:#FFFFFF;">Network Data</h2>';
 
 var networkData = HTML_HEADER_AND_IMPORTS;
 var tabURL = "";
@@ -54,6 +54,50 @@ var eachPageCallIterator = 0;
 var eachNetworkCallIterator = 0;
 var eachNetworkCallScreenshotIterator = 0;
 
+/**
+ * Capture Xhr request states.
+ * Logic START.
+ */
+var open = window.XMLHttpRequest.prototype.open;
+var send = window.XMLHttpRequest.prototype.send;
+
+function openReplacement(method, url, async, user, password) {  
+    this._url = url;
+    this._method = method;
+    return open.apply(this, arguments);
+}
+
+function sendReplacement(data) {  
+    this._requestData = data;
+    if(this.onreadystatechange) {
+        this._onreadystatechange = this.onreadystatechange;
+    }
+
+    this.onreadystatechange = onReadyStateChangeReplacement;
+    return send.apply(this, arguments);
+}
+
+function onReadyStateChangeReplacement() {  
+    if (this.readyState === 4) {
+        captureEachAjaxRequestResponse(this._method, this._requestData, this._url, this.status, this.response);
+    }
+        
+    if(this._onreadystatechange) {
+        return this._onreadystatechange.apply(this, arguments);
+    }
+}
+
+window.XMLHttpRequest.prototype.open = openReplacement;  
+window.XMLHttpRequest.prototype.send = sendReplacement;
+/**
+ * Capture Xhr request states.
+ * Logic END.
+ */
+
+/**
+ * Create draggable "Download network data" button.
+ * Logic START.
+ */
 var input = document.createElement("input");
 input.id = DOWNLOAD_BUTTON_ID;
 input.type = "button";
@@ -112,48 +156,55 @@ function downloadNetworkData() {
         downloadButtonDragged = false;
     }
 }
+/**
+ * Create draggable "Download network data" button.
+ * Logic END.
+ */
 
-(function() {
-    xhook.before(function(request) {
-        appendWindowLocationToNetworkData();
-    });
-})();
-
-(function() {
-    xhook.after(function(request, response) {
-        var eachNetworkData = createCollapsableButtonWithText(request.url, getEachNetworkData(request, response));
-
-        eachNetworkCallIterator++;
-        var eachNetworkCallDivMapKey = tabURL.toString() + request.url.toString() + eachNetworkCallIterator.toString();
-        eachNetworkCallDiv.set(eachNetworkCallDivMapKey, eachNetworkData);
-
-        var eachPageCallDivMapKey = tabURL.toString() + eachPageCallIterator.toString();
-        if (!eachPageNumberOfNetworkCalls.has(eachPageCallDivMapKey)) {
-            eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, 1);
-        } else {
-            eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, eachPageNumberOfNetworkCalls.get(eachPageCallDivMapKey) + 1);
-        }
-
-        setTimeout(function() {captureAfterScreenshot(request.url.toString())}, 1000);
-    });
-})();
-
-function captureAfterScreenshot(ajaxCall) {
-    captureScreenshot(ajaxCall);
-}
-
+ /**
+ * Capture webpage screenshot.
+ * Logic START
+ */
 function captureScreenshot(ajaxCall) {
     html2canvas(document.getElementById("root"), {
         onrendered: function (canvas) {
             eachNetworkCallScreenshotIterator++;
             var screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>';
-            var tabUrlButtonText = "Screenshot after " + ajaxCall;
-            var eachNetworkDataScreenshot = createCollapsableImage(screenshotDocument, tabUrlButtonText);
+            var eachNetworkDataScreenshot = createCollapsableImage(screenshotDocument);
             var eachNetworkCallScreenshotMapKey = tabURL.toString() + ajaxCall.toString() + eachNetworkCallScreenshotIterator.toString();
             eachNetworkCallScreenshot.set(eachNetworkCallScreenshotMapKey, eachNetworkDataScreenshot);
         },
         letterRendering:true
     });
+}
+/**
+ * Capture webpage screenshot.
+ * Logic END
+ */
+
+/**
+ * Create HTML divs for each AJAX request.
+ * Also capture screenshot after each AJAX request completes.
+ * Logic START
+ */
+function captureEachAjaxRequestResponse(requestMethod, requestData, requestURL, responseStatus, responseData) {
+    appendWindowLocationToNetworkData();
+
+    var eachNetworkData = createCollapsableButtonWithText(requestURL,
+        getEachNetworkData(requestMethod, requestData, responseStatus, responseData));
+
+    eachNetworkCallIterator++;
+    var eachNetworkCallDivMapKey = tabURL.toString() + requestURL.toString() + eachNetworkCallIterator.toString();
+    eachNetworkCallDiv.set(eachNetworkCallDivMapKey, eachNetworkData);
+
+    var eachPageCallDivMapKey = tabURL.toString() + eachPageCallIterator.toString();
+    if (!eachPageNumberOfNetworkCalls.has(eachPageCallDivMapKey)) {
+        eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, 1);
+    } else {
+        eachPageNumberOfNetworkCalls.set(eachPageCallDivMapKey, eachPageNumberOfNetworkCalls.get(eachPageCallDivMapKey) + 1);
+    }
+
+    setTimeout(function() {captureScreenshot(requestURL.toString())}, 1000);
 }
 
 function appendWindowLocationToNetworkData() {
@@ -167,11 +218,11 @@ function appendWindowLocationToNetworkData() {
     }
 }
 
-function getEachNetworkData(request, response) {
-    return colorText(request.method, REQUEST_METHOD) + NEW_LINE +
-            colorText(request.body, REQUEST_BODY) + NEW_LINE +
-            colorText(response.status, RESPONSE_STATUS) + NEW_LINE +
-            colorText(JSON.stringify(JSON.parse(response.data), null, 2), RESPONSE_DATA);
+function getEachNetworkData(requestMethod, requestData, responseStatus, responseData) {
+    return colorText(requestMethod, REQUEST_METHOD) + NEW_LINE +
+            colorText(requestData, REQUEST_BODY) + NEW_LINE +
+            colorText(responseStatus, RESPONSE_STATUS) + NEW_LINE +
+            colorText(JSON.stringify(JSON.parse(responseData), null, 2), RESPONSE_DATA);
 }
 
 function colorText(text, type) {
@@ -195,25 +246,34 @@ function createCollapsableTabUrlButtonWithText(tabUrlButtonText) {
     var data_target = "#demo" + id_iterator;
     var div_id = data_target.substr(1);
     id_iterator++;
-    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' +
-            tabUrlButtonText + '</button>' + '<div id=' + div_id + ' class="collapse" style="background-color: antiquewhite;">';
+    return '<button style="background-color:#FF4136;border-color:#FF4136;" type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' +
+            tabUrlButtonText + '</button>' + '<div id=' + div_id + ' style="background-color:rgb(133, 20, 75);" class="collapse" style="background-color: antiquewhite;">';
 }
 
 function createCollapsableButtonWithText(buttonText, internalText) {
     var data_target = "#demo" + id_iterator;
     var div_id = data_target.substr(1);
     id_iterator++;
-    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' + buttonText + '</button>' +
-            '<div id=' + div_id + ' class="collapse" style="background-color: lightgoldenrodyellow;" >' + internalText + '</div><br><br>';
+    return '<button style="background-color:#0074D9;border-color:#0074D9;" type="button" class="btn btn-info" data-toggle="collapse" data-target=' + data_target + '>' + buttonText + '</button>' +
+            '<div id=' + div_id + ' class="collapse" style="background-color: lightgoldenrodyellow;" ><div class="row">' + internalText + '</div></div><br><br>';
 }
 
-function createCollapsableImage(imageDocument, tabUrlButtonText) {
+function createCollapsableImage(imageDocument) {
     screenshot_iterator++;
-    return '<button type="button" class="btn btn-info" data-toggle="collapse" data-target=#' + screenshot_iterator + '>' +
-            tabUrlButtonText + '</button>' + '<div id=' + screenshot_iterator + ' class="collapse" style="background-color: antiquewhite;">' +
+    return '<button style="margin-left:20px;background-color:#0074D9;border-color:#0074D9;" type="button" class="btn btn-info" data-toggle="collapse" data-target=#' + screenshot_iterator + '>' +
+            SCREENSHOT_BUTTON_TEXT + '</button>' + '<div id=' + screenshot_iterator + ' class="collapse" style="background-color: antiquewhite;">' +
             imageDocument + '</div>';
 }
+/**
+ * Create HTML divs for each AJAX request.
+ * Also capture screenshot after each AJAX request completes.
+ * Logic END
+ */
 
+/**
+ * Build HTML page which will get downloaded.
+ * Logic START
+ */
 function buildNetworkData() {
     for (var [pageCallKey, pageCallValue] of eachPageCallDiv) {
         networkData = networkData + pageCallValue;
@@ -231,3 +291,7 @@ function buildNetworkData() {
         networkData = networkData + CLOSING_DIV + NEW_LINE + NEW_LINE;
     }
 }
+/**
+ * Build HTML page which will get downloaded.
+ * Logic END
+ */
