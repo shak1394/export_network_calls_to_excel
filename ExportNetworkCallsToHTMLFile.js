@@ -4,7 +4,7 @@
 // @version      0.1
 // @description  Collect network data and screenshots.
 // @author       Shaket Kumar
-// @match        https://*/***
+// @match        https://*/*
 // @require      https://cdnjs.cloudflare.com/ajax/libs/html2canvas/0.4.1/html2canvas.min.js
 // @run-at       document-start
 // @grant        none
@@ -25,7 +25,7 @@ var H2_CLOSING_TAG = "</h2>";
 var CLOSING_DIV = "</div>"
 var DOWNLOAD_BUTTON_TEXT = "Download Network Data";
 var DOWNLOAD_BUTTON_ID = "input_id";
-var DOWNLOAD_BUTTON_STYLE = "position:absolute; top:0px; left:0px; z-index:10; border-radius:100%; height:70px; background-color:coral; color:mediumblue; font-weight:bold";
+var DOWNLOAD_BUTTON_STYLE = "position:absolute; top:0px; left:0px; z-index:10000; border-radius:100%; height:70px; background-color:coral; color:mediumblue; font-weight:bold";
 var PIXEL = "px";
 var SCREENSHOT_BUTTON_TEXT = "Screenshot";
 var HTML_HEADER_AND_IMPORTS = '<!DOCTYPE html>' +
@@ -61,13 +61,13 @@ var eachNetworkCallScreenshotIterator = 0;
 var open = window.XMLHttpRequest.prototype.open;
 var send = window.XMLHttpRequest.prototype.send;
 
-function openReplacement(method, url, async, user, password) {  
+function openReplacement(method, url, async, user, password) {
     this._url = url;
     this._method = method;
     return open.apply(this, arguments);
 }
 
-function sendReplacement(data) {  
+function sendReplacement(data) {
     this._requestData = data;
     if(this.onreadystatechange) {
         this._onreadystatechange = this.onreadystatechange;
@@ -77,17 +77,17 @@ function sendReplacement(data) {
     return send.apply(this, arguments);
 }
 
-function onReadyStateChangeReplacement() {  
+function onReadyStateChangeReplacement() {
     if (this.readyState === 4) {
         captureEachAjaxRequestResponse(this._method, this._requestData, this._url, this.status, this.response);
     }
-        
+
     if(this._onreadystatechange) {
         return this._onreadystatechange.apply(this, arguments);
     }
 }
 
-window.XMLHttpRequest.prototype.open = openReplacement;  
+window.XMLHttpRequest.prototype.open = openReplacement;
 window.XMLHttpRequest.prototype.send = sendReplacement;
 /**
  * Capture Xhr request states.
@@ -105,9 +105,12 @@ input.value = DOWNLOAD_BUTTON_TEXT;
 input.onclick = downloadNetworkData;
 input.style = DOWNLOAD_BUTTON_STYLE;
 input.disabled = false;
-document.body.appendChild(input);
 
-dragElement(document.getElementById(DOWNLOAD_BUTTON_ID));
+window.onload = function() {
+    document.body.appendChild(input);
+}
+
+setTimeout(function() {dragElement(document.getElementById(DOWNLOAD_BUTTON_ID))}, 5000);
 
 function dragElement(element) {
     var pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
@@ -166,7 +169,7 @@ function downloadNetworkData() {
  * Logic START
  */
 function captureScreenshot(ajaxCall) {
-    html2canvas(document.getElementById("root"), {
+    html2canvas(document.getElementsByTagName("body")[0], {
         onrendered: function (canvas) {
             eachNetworkCallScreenshotIterator++;
             var screenshotDocument = '<img src="' + canvas.toDataURL("image/png") + '"/>';
@@ -222,7 +225,7 @@ function getEachNetworkData(requestMethod, requestData, responseStatus, response
     return colorText(requestMethod, REQUEST_METHOD) + NEW_LINE +
             colorText(requestData, REQUEST_BODY) + NEW_LINE +
             colorText(responseStatus, RESPONSE_STATUS) + NEW_LINE +
-            colorText(JSON.stringify(JSON.parse(responseData), null, 2), RESPONSE_DATA);
+            colorText(responseData, RESPONSE_DATA);
 }
 
 function colorText(text, type) {
@@ -260,6 +263,9 @@ function createCollapsableButtonWithText(buttonText, internalText) {
 
 function createCollapsableImage(imageDocument) {
     screenshot_iterator++;
+    if (imageDocument === undefined) {
+        imageDocument = "Page not loaded yet...";    
+    }
     return '<button style="margin-left:20px;background-color:#0074D9;border-color:#0074D9;" type="button" class="btn btn-info" data-toggle="collapse" data-target=#' + screenshot_iterator + '>' +
             SCREENSHOT_BUTTON_TEXT + '</button>' + '<div id=' + screenshot_iterator + ' class="collapse" style="background-color: antiquewhite;">' +
             imageDocument + '</div>';
